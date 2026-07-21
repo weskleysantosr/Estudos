@@ -64,8 +64,12 @@ site/         → Streamlit (consome a FastAPI)
 ### 2. Databricks Asset Bundle (job silver→gold)
 
 ```bash
-pip install databricks-cli  # ou: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
-databricks configure --host <seu-workspace> --token
+# `pip install databricks-cli` instala a CLI antiga (não tem `bundle`) — a
+# certa é esta, distribuída como binário:
+winget install Databricks.DatabricksCLI          # Windows
+# curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh   # macOS/Linux
+
+databricks auth login --host <seu-workspace>     # abre o navegador, sem token pra copiar/colar
 cd databricks/bundle
 # Edite resources/jobs.yml: troque REPLACE_COM_SEU_CLUSTER_ID pelo Cluster ID do passo 1
 databricks bundle validate
