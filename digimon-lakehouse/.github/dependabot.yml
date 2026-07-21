@@ -1,0 +1,24 @@
+# Atualização automática de dependências vulneráveis/desatualizadas — grátis
+# no GitHub, um PR por vez, review manual antes de mergear.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /digimon-lakehouse/ingestion
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /digimon-lakehouse/api
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /digimon-lakehouse/scripts
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /digimon-lakehouse/api
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

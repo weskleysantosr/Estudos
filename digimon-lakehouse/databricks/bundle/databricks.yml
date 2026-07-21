@@ -1,0 +1,26 @@
+# Databricks Asset Bundle — define o pipeline (notebooks + job) como código
+# versionado, em vez de clicar na UI. Rode `databricks bundle validate` antes
+# de `databricks bundle deploy` para pegar erros de schema cedo.
+#
+# Autenticação: NUNCA coloque host/token aqui. Use um profile do Databricks
+# CLI (`databricks configure`) ou as variáveis DATABRICKS_HOST/DATABRICKS_TOKEN
+# de ambiente — é assim que o GitHub Actions também autentica (via secrets).
+
+bundle:
+  name: digimon-lakehouse
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true
+
+  prod:
+    mode: production
+    # Em produção o bundle roda com o principal do deploy, não com o usuário
+    # que rodou `databricks bundle deploy` por último — evita jobs "presos"
+    # à conta pessoal de quem fez o deploy.
+    run_as:
+      user_name: ${workspace.current_user.userName}

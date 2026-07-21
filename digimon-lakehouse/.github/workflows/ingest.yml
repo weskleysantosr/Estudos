@@ -1,0 +1,51 @@
+# Pipeline completo: ingestão -> job Databricks (silver/gold) -> export pro
+# Postgres de serving. De propósito SEM gatilho `pull_request`: workflows que
+# usam secrets nunca devem rodar em PR de fork (o fork poderia ler os
+# secrets); só `schedule` e `workflow_dispatch` (manual, só quem tem acesso
+# de escrita no repo consegue disparar).
+name: ingest
+
+on:
+  schedule:
+    - cron: "0 5 * * *" # 05:00 UTC (~02:00 America/Sao_Paulo) diariamente
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ingest-pipeline
+  cancel-in-progress: false # nunca cancelar um run no meio de uma escrita no Bronze/Postgres
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+      DATABRICKS_JOB_ID: ${{ secrets.DATABRICKS_JOB_ID }}
+      PG_WRITER_DSN: ${{ secrets.PG_WRITER_DSN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Ingestão DAPI -> Bronze
+        working-directory: digimon-lakehouse/ingestion
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+          python extract_digimon.py
+
+      - name: Disparar job Databricks (silver -> gold) e esperar terminar
+        working-directory: digimon-lakehouse/scripts
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+          python run_databricks_job_and_wait.py
+
+      - name: Exportar Gold -> Postgres
+        working-directory: digimon-lakehouse/scripts
+        run: python export_gold_to_postgres.py

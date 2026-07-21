@@ -1,0 +1,6 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic-settings==2.6.1
+psycopg[binary,pool]==3.2.3
+slowapi==0.1.9
+cachetools==5.5.0

@@ -1,0 +1,8 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S"]
+# S101 (assert usado fora de teste) fica ruidoso em testes legítimos com assert.
+per-file-ignores = { "**/tests/*.py" = ["S101"] }

@@ -1,0 +1,58 @@
+# Job: silver -> gold. A ingestão (bronze) roda fora do Databricks Job (via
+# GitHub Actions + script Python, ver ../../ingestion) porque paginar uma API
+# HTTP externa não precisa de cluster Spark — rodar isso num job cluster só
+# geraria custo de DBU parado esperando rede.
+#
+# `existing_cluster_id` (não `new_cluster`): aponta para o cluster all-purpose
+# que você já tem no Free/Community Edition, evitando criar+destruir um job
+# cluster a cada run (mais lento e, em edições pagas, mais caro). Troque o
+# valor pelo Cluster ID real (Compute > seu cluster > Cluster ID, na aba
+# "Advanced options" ou na URL).
+#
+# `pause_status: PAUSED` por padrão — o agendamento nativo fica desligado até
+# você confirmar (na UI ou tirando esta linha) que quer que o Databricks
+# gaste horas de compute sozinho. O gatilho recomendado para este projeto é o
+# GitHub Actions (.github/workflows/ingest.yml), que chama este job via API
+# *depois* que a ingestão termina — assim silver/gold nunca rodam com dados
+# de bronze pela metade.
+
+resources:
+  jobs:
+    digimon_transform_pipeline:
+      name: digimon_transform_pipeline
+      tags:
+        project: digimon-lakehouse
+
+      tasks:
+        - task_key: setup_schemas
+          existing_cluster_id: "REPLACE_COM_SEU_CLUSTER_ID"
+          notebook_task:
+            notebook_path: ../../notebooks/00_setup_schemas.py
+
+        - task_key: silver_transform
+          depends_on:
+            - task_key: setup_schemas
+          existing_cluster_id: "REPLACE_COM_SEU_CLUSTER_ID"
+          notebook_task:
+            notebook_path: ../../notebooks/01_silver_transform.py
+
+        - task_key: gold_aggregate
+          depends_on:
+            - task_key: silver_transform
+          existing_cluster_id: "REPLACE_COM_SEU_CLUSTER_ID"
+          notebook_task:
+            notebook_path: ../../notebooks/02_gold_aggregate.py
+
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?" # 06:00 diariamente
+        timezone_id: America/Sao_Paulo
+        pause_status: PAUSED
+
+      email_notifications:
+        on_failure:
+          - ${var.notification_email}
+
+variables:
+  notification_email:
+    description: E-mail para notificação de falha do job
+    default: ""
