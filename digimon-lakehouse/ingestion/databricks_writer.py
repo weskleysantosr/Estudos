@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from databricks import sql
@@ -49,7 +49,7 @@ class DatabricksBronzeWriter:
         self._schema = schema or os.environ.get("DATABRICKS_SCHEMA_BRONZE", "bronze")
         self._connection = None
 
-    def __enter__(self) -> "DatabricksBronzeWriter":
+    def __enter__(self) -> DatabricksBronzeWriter:
         self._connection = sql.connect(
             server_hostname=self._server_hostname,
             http_path=self._http_path,
@@ -89,7 +89,7 @@ class DatabricksBronzeWriter:
         if not records:
             return 0
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         rows = [
             {"digimon_id": r["digimon_id"], "raw_json": r["raw_json"], "ingested_at": now}
             for r in records

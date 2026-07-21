@@ -70,7 +70,11 @@ def run() -> int:
             if result_state == "SUCCESS":
                 logger.info("Job concluído com sucesso.")
                 return 0
-            logger.error("Job terminou sem sucesso: result_state=%s state_message=%s", result_state, state.get("state_message"))
+            logger.error(
+                "Job terminou sem sucesso: result_state=%s state_message=%s",
+                result_state,
+                state.get("state_message"),
+            )
             return 1
 
         time.sleep(POLL_INTERVAL_SECONDS)

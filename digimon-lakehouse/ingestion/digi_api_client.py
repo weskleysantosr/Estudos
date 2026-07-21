@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -69,7 +70,7 @@ class DigiApiClient:
     def close(self) -> None:
         self._session.close()
 
-    def __enter__(self) -> "DigiApiClient":
+    def __enter__(self) -> DigiApiClient:
         return self
 
     def __exit__(self, *_exc_info: Any) -> None:

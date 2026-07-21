@@ -49,7 +49,10 @@ async def list_digimons(
 
         async with get_connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(f"SELECT count(*) FROM digimon_summary {where_clause}", params)
+                # noqa: S608 — where_clause só concatena os literais fixos
+                # "%s = ANY(...)" declarados acima; nenhum valor de usuário
+                # entra no texto do SQL, só via `params`/`execute(..., params)`.
+                await cur.execute(f"SELECT count(*) FROM digimon_summary {where_clause}", params)  # noqa: S608
                 (total,) = await cur.fetchone()
 
                 await cur.execute(
@@ -60,13 +63,13 @@ async def list_digimons(
                     {where_clause}
                     ORDER BY digimon_id
                     LIMIT %s OFFSET %s
-                    """,
+                    """,  # noqa: S608
                     [*params, limit, offset],
                 )
                 columns = [d.name for d in cur.description]
                 rows = await cur.fetchall()
 
-        items = [DigimonSummary(**dict(zip(columns, row))) for row in rows]
+        items = [DigimonSummary(**dict(zip(columns, row, strict=True))) for row in rows]
         return PaginatedDigimons(total=total, limit=limit, offset=offset, items=items)
 
     return await cached(cache_key, _load)
@@ -93,6 +96,6 @@ async def get_digimon(request: Request, digimon_id: int) -> DigimonSummary:
                 if row is None:
                     raise HTTPException(status_code=404, detail="Digimon não encontrado")
                 columns = [d.name for d in cur.description]
-        return DigimonSummary(**dict(zip(columns, row)))
+        return DigimonSummary(**dict(zip(columns, row, strict=True)))
 
     return await cached(cache_key, _load)

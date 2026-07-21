@@ -16,10 +16,9 @@ import logging
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 from databricks_writer import DatabricksBronzeWriter
 from digi_api_client import DigiApiClient, DigiApiError
+from dotenv import load_dotenv
 
 logging.basicConfig(
     level=logging.INFO,

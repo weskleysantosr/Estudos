@@ -13,18 +13,16 @@ instâncias, o próximo passo seria um cache externo (Redis), não mais isto.
 
 from __future__ import annotations
 
-from typing import Awaitable, Callable, TypeVar
+from collections.abc import Awaitable, Callable
 
 from cachetools import TTLCache
 
 from app.config import get_settings
 
-T = TypeVar("T")
-
 _cache: TTLCache = TTLCache(maxsize=256, ttl=get_settings().api_cache_ttl_seconds or 1)
 
 
-async def cached(key: str, loader: Callable[[], Awaitable[T]]) -> T:
+async def cached[T](key: str, loader: Callable[[], Awaitable[T]]) -> T:
     if key in _cache:
         return _cache[key]
     value = await loader()

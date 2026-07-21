@@ -73,7 +73,10 @@ def test_get_digimon_returns_data(client):
         "digimon_id", "name", "x_antibody", "release_date", "image_url",
         "levels", "types", "attributes", "fields", "next_evolution_count",
     ]
-    row = (1, "Agumon", False, "1997-03-26", "https://example.com/agumon.png", ["Child"], ["Vaccine"], ["Fire"], ["Nature Spirits"], 1)
+    row = (
+        1, "Agumon", False, "1997-03-26", "https://example.com/agumon.png",
+        ["Child"], ["Vaccine"], ["Fire"], ["Nature Spirits"], 1,
+    )
     fake_conn = _fake_get_connection(row=row, columns=columns)
     with patch("app.routers.digimons.get_connection", fake_conn):
         response = client.get("/digimons/1")

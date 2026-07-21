@@ -15,7 +15,7 @@ async def _load_stat(table: str, label_column: str) -> list[StatItem]:
     # abaixo (nunca input do usuário) — seguro compor no texto do SQL aqui.
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(f"SELECT {label_column}, digimon_count FROM {table} ORDER BY digimon_count DESC")
+            await cur.execute(f"SELECT {label_column}, digimon_count FROM {table} ORDER BY digimon_count DESC")  # noqa: S608
             rows = await cur.fetchall()
     return [StatItem(label=row[0], digimon_count=row[1]) for row in rows]
 
@@ -40,7 +40,9 @@ async def stats_by_attribute(request: Request) -> list[StatItem]:
 
 @router.get("/longest-evolution-chains", response_model=list[EvolutionChain])
 @limiter.limit("30/minute")
-async def longest_evolution_chains(request: Request, limit: int = Query(default=10, ge=1, le=50)) -> list[EvolutionChain]:
+async def longest_evolution_chains(
+    request: Request, limit: int = Query(default=10, ge=1, le=50)
+) -> list[EvolutionChain]:
     async def _load() -> list[EvolutionChain]:
         async with get_connection() as conn:
             async with conn.cursor() as cur:

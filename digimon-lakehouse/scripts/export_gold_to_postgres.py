@@ -30,8 +30,9 @@ import os
 from pathlib import Path
 
 import psycopg
-from databricks import sql
 from dotenv import load_dotenv
+
+from databricks import sql
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("export_gold_to_postgres")
@@ -79,15 +80,17 @@ def _fetch_from_databricks(table_name: str) -> tuple[list[str], list[tuple]]:
         with conn.cursor() as cursor:
             # Nome da tabela vem de uma constante interna (TABLES), nunca de
             # input externo — seguro concatenar aqui; dado em si sempre via bind.
-            cursor.execute(f"SELECT * FROM {table_name}")
+            cursor.execute(f"SELECT * FROM {table_name}")  # noqa: S608
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
     return columns, rows
 
 
-def _replace_table_atomically(pg_conn: psycopg.Connection, table_name: str, ddl: str, columns: list[str], rows: list[tuple]) -> None:
+def _replace_table_atomically(
+    pg_conn: psycopg.Connection, table_name: str, ddl: str, columns: list[str], rows: list[tuple]
+) -> None:
     staging = f"{table_name}_staging"
-    old = f"{table_name}_old"
+    backup = f"{table_name}_old"
 
     with pg_conn.cursor() as cur:
         cur.execute(f"DROP TABLE IF EXISTS {staging}")
@@ -98,8 +101,13 @@ def _replace_table_atomically(pg_conn: psycopg.Connection, table_name: str, ddl:
             for row in rows:
                 copy.write_row(row)
 
-        cur.execute(f"DROP TABLE IF EXISTS {table_name}")
+        # Nunca derruba a tabela "live" antes de ter a substituta pronta: se
+        # algo falhar entre o rename e o commit, a versão anterior continua
+        # existindo como `_old` em vez de ter sido destruída sem substituto.
+        cur.execute(f"DROP TABLE IF EXISTS {backup}")
+        cur.execute(f"ALTER TABLE IF EXISTS {table_name} RENAME TO {backup}")
         cur.execute(f"ALTER TABLE {staging} RENAME TO {table_name}")
+        cur.execute(f"DROP TABLE IF EXISTS {backup}")
     # commit acontece no `with pg_conn` externo — troca é tudo-ou-nada.
     logger.info("Tabela %s atualizada com %d linhas.", table_name, len(rows))
 
