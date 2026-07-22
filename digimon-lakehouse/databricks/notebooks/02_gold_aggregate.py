@@ -46,6 +46,42 @@
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ### Lista completa de evoluções por digimon
+# MAGIC
+# MAGIC `digimon_summary.next_evolution_count` já existia (só a contagem). Esta
+# MAGIC tabela traz a lista de verdade — pra quê e de onde cada digimon evolui —
+# MAGIC pro site/API mostrarem ao clicar num digimon. `direction` distingue as
+# MAGIC duas pontas da mesma aresta (`next` = evolui pra, `prior` = evoluiu de).
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE OR REPLACE TABLE gold.digimon_evolutions AS
+# MAGIC SELECT
+# MAGIC   fe.from_digimon_id AS digimon_id,
+# MAGIC   'next' AS direction,
+# MAGIC   fe.to_digimon_id AS related_digimon_id,
+# MAGIC   d.name AS related_digimon_name,
+# MAGIC   d.image_url AS related_digimon_image_url,
+# MAGIC   fe.condition
+# MAGIC FROM silver.fact_evolution fe
+# MAGIC JOIN silver.dim_digimon d ON d.digimon_id = fe.to_digimon_id
+# MAGIC
+# MAGIC UNION ALL
+# MAGIC
+# MAGIC SELECT
+# MAGIC   fe.to_digimon_id AS digimon_id,
+# MAGIC   'prior' AS direction,
+# MAGIC   fe.from_digimon_id AS related_digimon_id,
+# MAGIC   d.name AS related_digimon_name,
+# MAGIC   d.image_url AS related_digimon_image_url,
+# MAGIC   fe.condition
+# MAGIC FROM silver.fact_evolution fe
+# MAGIC JOIN silver.dim_digimon d ON d.digimon_id = fe.from_digimon_id;
+
+# COMMAND ----------
+
 # MAGIC %sql
 # MAGIC CREATE OR REPLACE TABLE gold.stats_by_level AS
 # MAGIC SELECT lvl.level_name, count(DISTINCT b.digimon_id) AS digimon_count

@@ -13,12 +13,17 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.cache import cached
 from app.db import get_connection
-from app.models import DigimonSummary, PaginatedDigimons
+from app.models import DigimonEvolution, DigimonSummary, PaginatedDigimons
 from app.security import limiter
 
 router = APIRouter(prefix="/digimons", tags=["digimons"])
 
 _ALLOWED_FILTER_PATTERN = r"^[A-Za-zÀ-ÿ0-9 \-]{1,50}$"
+# Nomes de Digimon têm mais pontuação que os filtros de vocabulário fixo
+# (level/type/attribute) — ex.: "Algomon (Baby I)". Ainda assim travamos o
+# formato: a proteção real contra injeção é o bind de parâmetro no ILIKE
+# abaixo, isto aqui é só higiene contra input claramente malformado.
+_NAME_SEARCH_PATTERN = r"^[\w À-ÿ'.()\-]{1,50}$"
 
 
 @router.get("", response_model=PaginatedDigimons)
@@ -30,8 +35,9 @@ async def list_digimons(
     level: str | None = Query(default=None, pattern=_ALLOWED_FILTER_PATTERN),
     type: str | None = Query(default=None, pattern=_ALLOWED_FILTER_PATTERN),
     attribute: str | None = Query(default=None, pattern=_ALLOWED_FILTER_PATTERN),
+    name: str | None = Query(default=None, pattern=_NAME_SEARCH_PATTERN),
 ) -> PaginatedDigimons:
-    cache_key = f"list:{limit}:{offset}:{level}:{type}:{attribute}"
+    cache_key = f"list:{limit}:{offset}:{level}:{type}:{attribute}:{name}"
 
     async def _load() -> PaginatedDigimons:
         conditions = []
@@ -45,6 +51,9 @@ async def list_digimons(
         if attribute:
             conditions.append("%s = ANY(attributes)")
             params.append(attribute)
+        if name:
+            conditions.append("name ILIKE %s")
+            params.append(f"%{name}%")
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
         async with get_connection() as conn:
@@ -97,5 +106,30 @@ async def get_digimon(request: Request, digimon_id: int) -> DigimonSummary:
                     raise HTTPException(status_code=404, detail="Digimon não encontrado")
                 columns = [d.name for d in cur.description]
         return DigimonSummary(**dict(zip(columns, row, strict=True)))
+
+    return await cached(cache_key, _load)
+
+
+@router.get("/{digimon_id}/evolutions", response_model=list[DigimonEvolution])
+@limiter.limit("60/minute")
+async def get_digimon_evolutions(request: Request, digimon_id: int) -> list[DigimonEvolution]:
+    cache_key = f"evolutions:{digimon_id}"
+
+    async def _load() -> list[DigimonEvolution]:
+        async with get_connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    SELECT direction, related_digimon_id, related_digimon_name,
+                           related_digimon_image_url, condition
+                    FROM digimon_evolutions
+                    WHERE digimon_id = %s
+                    ORDER BY direction, related_digimon_name
+                    """,
+                    [digimon_id],
+                )
+                columns = [d.name for d in cur.description]
+                rows = await cur.fetchall()
+        return [DigimonEvolution(**dict(zip(columns, row, strict=True))) for row in rows]
 
     return await cached(cache_key, _load)

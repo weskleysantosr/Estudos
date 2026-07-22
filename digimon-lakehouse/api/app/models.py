@@ -31,3 +31,11 @@ class EvolutionChain(BaseModel):
     leaf_digimon_name: str
     depth: int
     digimon_id_path: list[int]
+
+
+class DigimonEvolution(BaseModel):
+    direction: str  # "next" (evolui pra) ou "prior" (evoluiu de)
+    related_digimon_id: int
+    related_digimon_name: str
+    related_digimon_image_url: str | None
+    condition: str | None

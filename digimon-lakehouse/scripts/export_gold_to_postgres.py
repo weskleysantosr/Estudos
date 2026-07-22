@@ -67,6 +67,17 @@ TABLES: list[tuple[str, str]] = [
         digimon_id_path BIGINT[]
         """,
     ),
+    (
+        "digimon_evolutions",
+        """
+        digimon_id BIGINT NOT NULL,
+        direction TEXT NOT NULL,
+        related_digimon_id BIGINT NOT NULL,
+        related_digimon_name TEXT NOT NULL,
+        related_digimon_image_url TEXT,
+        condition TEXT
+        """,
+    ),
 ]
 
 # Colunas ARRAY por tabela. O databricks-sql-connector devolve ARRAY<...>
