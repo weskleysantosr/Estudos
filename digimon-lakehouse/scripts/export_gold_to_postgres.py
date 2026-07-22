@@ -25,6 +25,7 @@ Performance:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -68,6 +69,25 @@ TABLES: list[tuple[str, str]] = [
     ),
 ]
 
+# Colunas ARRAY por tabela. O databricks-sql-connector devolve ARRAY<...>
+# como STRING no formato JSON (ex.: '["Adult"]'), não como lista Python — sem
+# converter antes do COPY, o Postgres rejeita ("[" não é a sintaxe de array
+# dele, que usa "{...}"). Ver `_coerce_row`.
+ARRAY_COLUMNS: dict[str, set[str]] = {
+    "digimon_summary": {"levels", "types", "attributes", "fields"},
+    "longest_evolution_chains": {"digimon_id_path"},
+}
+
+
+def _coerce_row(row: tuple, columns: list[str], array_columns: set[str]) -> tuple:
+    if not array_columns:
+        return row
+    coerced = list(row)
+    for i, col in enumerate(columns):
+        if col in array_columns and isinstance(coerced[i], str):
+            coerced[i] = json.loads(coerced[i])
+    return tuple(coerced)
+
 
 def _fetch_from_databricks(table_name: str) -> tuple[list[str], list[tuple]]:
     with sql.connect(
@@ -87,7 +107,12 @@ def _fetch_from_databricks(table_name: str) -> tuple[list[str], list[tuple]]:
 
 
 def _replace_table_atomically(
-    pg_conn: psycopg.Connection, table_name: str, ddl: str, columns: list[str], rows: list[tuple]
+    pg_conn: psycopg.Connection,
+    table_name: str,
+    ddl: str,
+    columns: list[str],
+    rows: list[tuple],
+    array_columns: set[str],
 ) -> None:
     staging = f"{table_name}_staging"
     backup = f"{table_name}_old"
@@ -99,7 +124,7 @@ def _replace_table_atomically(
         col_list = ", ".join(columns)
         with cur.copy(f"COPY {staging} ({col_list}) FROM STDIN") as copy:
             for row in rows:
-                copy.write_row(row)
+                copy.write_row(_coerce_row(row, columns, array_columns))
 
         # Nunca derruba a tabela "live" antes de ter a substituta pronta: se
         # algo falhar entre o rename e o commit, a versão anterior continua
@@ -119,8 +144,9 @@ def run() -> int:
     with psycopg.connect(writer_dsn) as pg_conn:
         for table_name, ddl in TABLES:
             columns, rows = _fetch_from_databricks(table_name)
+            array_columns = ARRAY_COLUMNS.get(table_name, set())
             with pg_conn.transaction():
-                _replace_table_atomically(pg_conn, table_name, ddl, columns, rows)
+                _replace_table_atomically(pg_conn, table_name, ddl, columns, rows, array_columns)
 
     logger.info("Export concluído: %d tabelas atualizadas.", len(TABLES))
     return 0

@@ -42,8 +42,12 @@ digimon_schema = """
 
 from pyspark.sql import functions as F
 
+# Sem .cache(): serverless compute não suporta persist/cache de DataFrame
+# ("[NOT_SUPPORTED_WITH_SERVERLESS] PERSIST TABLE is not supported"). Não faz
+# falta aqui — dataset é pequeno o bastante (algumas centenas de linhas) pra
+# reprocessar o parse do zero em cada leitura sem custo perceptível.
 bronze_df = spark.table("bronze.raw_digimon")
-parsed_df = bronze_df.select(F.from_json("raw_json", digimon_schema).alias("d")).select("d.*").cache()
+parsed_df = bronze_df.select(F.from_json("raw_json", digimon_schema).alias("d")).select("d.*")
 
 # Falha rápido e visível se o parse não bater com o schema esperado, em vez de
 # publicar tabelas silver com dados parcialmente nulos sem ninguém notar.
@@ -142,7 +146,9 @@ parsed_df.createOrReplaceTempView("v_digimon_parsed")
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC CREATE OR REPLACE VIEW silver.dq_evolution_inconsistencies AS
+# MAGIC -- TABLE, não VIEW: uma view persistente não pode referenciar a temp
+# MAGIC -- view `v_digimon_parsed` (só existe durante esta sessão do notebook).
+# MAGIC CREATE OR REPLACE TABLE silver.dq_evolution_inconsistencies AS
 # MAGIC SELECT fe.from_digimon_id, fe.to_digimon_id, fe.to_digimon_name
 # MAGIC FROM silver.fact_evolution fe
 # MAGIC LEFT ANTI JOIN (
@@ -151,7 +157,3 @@ parsed_df.createOrReplaceTempView("v_digimon_parsed")
 # MAGIC   LATERAL VIEW explode(priorEvolutions) AS pe
 # MAGIC ) reverse
 # MAGIC ON fe.from_digimon_id = reverse.from_digimon_id AND fe.to_digimon_id = reverse.to_digimon_id;
-
-# COMMAND ----------
-
-parsed_df.unpersist()
