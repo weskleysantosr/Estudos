@@ -72,6 +72,53 @@ def load_evolutions(digimon_id: int) -> list[dict]:
     return _get(f"/digimons/{digimon_id}/evolutions") or []
 
 
+# Paleta categórica (3 papéis: quem evoluiu para o digimon atual, o próprio
+# digimon, quem ele pode virar) — cores escolhidas para ficarem distinguíveis
+# mesmo em daltonismo, não só "bonitinhas".
+_COLOR_PRIOR = "#2a78d6"  # azul — evoluiu de
+_COLOR_CURRENT = "#eb6834"  # laranja — o digimon aberto
+_COLOR_NEXT = "#1baf7a"  # verde-água — evolui para
+_MAX_TREE_NODES = 12  # grafo de um digimon com 80+ evoluções vira ilegível sem teto
+
+
+def _dot_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def build_evolution_tree_dot(digimon_name: str, evolutions: list[dict]) -> tuple[str, int, int]:
+    """Monta o grafo (DOT) prior -> atual -> next. Retorna também quantos nós
+    de cada lado ficaram de fora do teto, pra avisar o usuário."""
+    prior = [e for e in evolutions if e["direction"] == "prior"]
+    next_ = [e for e in evolutions if e["direction"] == "next"]
+    prior_shown, prior_hidden = prior[:_MAX_TREE_NODES], max(0, len(prior) - _MAX_TREE_NODES)
+    next_shown, next_hidden = next_[:_MAX_TREE_NODES], max(0, len(next_) - _MAX_TREE_NODES)
+
+    lines = [
+        "digraph {",
+        "rankdir=LR;",
+        'bgcolor="transparent";',
+        'node [shape=box, style="filled,rounded", fontname="sans-serif", fontcolor="white", color="none"];',
+        'edge [color="#89887f"];',
+        f'current [label="{_dot_escape(digimon_name)}", fillcolor="{_COLOR_CURRENT}", penwidth=2];',
+    ]
+    for i, e in enumerate(prior_shown):
+        node = f"prior_{i}"
+        lines.append(f'{node} [label="{_dot_escape(e["related_digimon_name"])}", fillcolor="{_COLOR_PRIOR}"];')
+        lines.append(f"{node} -> current;")
+    if prior_hidden:
+        lines.append(f'prior_more [label="+{prior_hidden} outras", shape=plaintext, fontcolor="#898781"];')
+        lines.append("prior_more -> current [style=dashed, arrowhead=none];")
+    for i, e in enumerate(next_shown):
+        node = f"next_{i}"
+        lines.append(f'{node} [label="{_dot_escape(e["related_digimon_name"])}", fillcolor="{_COLOR_NEXT}"];')
+        lines.append(f"current -> {node};")
+    if next_hidden:
+        lines.append(f'next_more [label="+{next_hidden} outras", shape=plaintext, fontcolor="#898781"];')
+        lines.append("current -> next_more [style=dashed, arrowhead=none];")
+    lines.append("}")
+    return "\n".join(lines), prior_hidden, next_hidden
+
+
 st.set_page_config(page_title="Digimon Lakehouse", page_icon="🦖", layout="wide")
 st.title("🦖 Digimon Lakehouse")
 st.caption("Bronze → Silver → Gold no Databricks, servido via FastAPI. Projeto de estudo de engenharia de dados.")
@@ -109,12 +156,24 @@ with tab_explore:
             )
 
             st.divider()
-            st.markdown("**Digivoluções**")
+            st.markdown("**Árvore de digivolução**")
             evolutions = load_evolutions(digimon["digimon_id"])
-            next_evos = [e["related_digimon_name"] for e in evolutions if e["direction"] == "next"]
-            prior_evos = [e["related_digimon_name"] for e in evolutions if e["direction"] == "prior"]
-            st.write(f"➡️ Evolui para: {', '.join(next_evos) if next_evos else '_nenhuma registrada_'}")
-            st.write(f"⬅️ Evoluiu de: {', '.join(prior_evos) if prior_evos else '_nenhuma registrada_'}")
+            if not evolutions:
+                st.caption("Nenhuma digivolução registrada pra este digimon.")
+            else:
+                dot, prior_hidden, next_hidden = build_evolution_tree_dot(digimon["name"], evolutions)
+                st.graphviz_chart(dot, use_container_width=True)
+                st.caption("🔵 evoluiu de · 🟠 este digimon · 🟢 evolui para")
+                if prior_hidden or next_hidden:
+                    st.caption(
+                        f"Mostrando até {_MAX_TREE_NODES} por lado — "
+                        f"{prior_hidden} anteriores e {next_hidden} seguintes ficaram de fora do desenho."
+                    )
+                with st.expander("Ver lista completa (texto)"):
+                    next_evos = [e["related_digimon_name"] for e in evolutions if e["direction"] == "next"]
+                    prior_evos = [e["related_digimon_name"] for e in evolutions if e["direction"] == "prior"]
+                    st.write(f"➡️ Evolui para: {', '.join(next_evos) if next_evos else '_nenhuma registrada_'}")
+                    st.write(f"⬅️ Evoluiu de: {', '.join(prior_evos) if prior_evos else '_nenhuma registrada_'}")
 
 with tab_stats:
     st.subheader("Distribuição por nível")
