@@ -169,7 +169,10 @@ with tab_explore:
                         f"Mostrando até {_MAX_TREE_NODES} por lado — "
                         f"{prior_hidden} anteriores e {next_hidden} seguintes ficaram de fora do desenho."
                     )
-                with st.expander("Ver lista completa (texto)"):
+                # Nota: não dá pra usar outro st.expander aqui — Streamlit não
+                # permite expander dentro de expander (StreamlitAPIException).
+                if prior_hidden or next_hidden:
+                    st.markdown("**Lista completa (texto)**")
                     next_evos = [e["related_digimon_name"] for e in evolutions if e["direction"] == "next"]
                     prior_evos = [e["related_digimon_name"] for e in evolutions if e["direction"] == "prior"]
                     st.write(f"➡️ Evolui para: {', '.join(next_evos) if next_evos else '_nenhuma registrada_'}")
