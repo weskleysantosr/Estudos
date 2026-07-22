@@ -121,7 +121,7 @@ async def get_digimon_evolutions(request: Request, digimon_id: int) -> list[Digi
                 await cur.execute(
                     """
                     SELECT direction, related_digimon_id, related_digimon_name,
-                           related_digimon_image_url, condition
+                           related_digimon_image_url, condition, related_digimon_levels
                     FROM digimon_evolutions
                     WHERE digimon_id = %s
                     ORDER BY direction, related_digimon_name

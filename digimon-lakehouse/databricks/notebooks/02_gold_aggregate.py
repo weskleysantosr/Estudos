@@ -58,27 +58,48 @@
 
 # MAGIC %sql
 # MAGIC CREATE OR REPLACE TABLE gold.digimon_evolutions AS
-# MAGIC SELECT
-# MAGIC   fe.from_digimon_id AS digimon_id,
-# MAGIC   'next' AS direction,
-# MAGIC   fe.to_digimon_id AS related_digimon_id,
-# MAGIC   d.name AS related_digimon_name,
-# MAGIC   d.image_url AS related_digimon_image_url,
-# MAGIC   fe.condition
-# MAGIC FROM silver.fact_evolution fe
-# MAGIC JOIN silver.dim_digimon d ON d.digimon_id = fe.to_digimon_id
+# MAGIC WITH base AS (
+# MAGIC   SELECT
+# MAGIC     fe.from_digimon_id AS digimon_id,
+# MAGIC     'next' AS direction,
+# MAGIC     fe.to_digimon_id AS related_digimon_id,
+# MAGIC     d.name AS related_digimon_name,
+# MAGIC     d.image_url AS related_digimon_image_url,
+# MAGIC     fe.condition
+# MAGIC   FROM silver.fact_evolution fe
+# MAGIC   JOIN silver.dim_digimon d ON d.digimon_id = fe.to_digimon_id
 # MAGIC
-# MAGIC UNION ALL
+# MAGIC   UNION ALL
 # MAGIC
+# MAGIC   SELECT
+# MAGIC     fe.to_digimon_id AS digimon_id,
+# MAGIC     'prior' AS direction,
+# MAGIC     fe.from_digimon_id AS related_digimon_id,
+# MAGIC     d.name AS related_digimon_name,
+# MAGIC     d.image_url AS related_digimon_image_url,
+# MAGIC     fe.condition
+# MAGIC   FROM silver.fact_evolution fe
+# MAGIC   JOIN silver.dim_digimon d ON d.digimon_id = fe.from_digimon_id
+# MAGIC ),
+# MAGIC -- Agregado à parte (não um JOIN direto em `base`) porque um digimon pode
+# MAGIC -- ter mais de um nível (bridge 1:N) — sem agrupar antes, cada aresta de
+# MAGIC -- evolução se multiplicaria por linha extra por nível do relacionado.
+# MAGIC related_levels AS (
+# MAGIC   SELECT bl.digimon_id, sort_array(collect_set(lvl.level_name)) AS levels
+# MAGIC   FROM silver.bridge_digimon_level bl
+# MAGIC   JOIN silver.dim_level lvl ON lvl.level_id = bl.level_id
+# MAGIC   GROUP BY bl.digimon_id
+# MAGIC )
 # MAGIC SELECT
-# MAGIC   fe.to_digimon_id AS digimon_id,
-# MAGIC   'prior' AS direction,
-# MAGIC   fe.from_digimon_id AS related_digimon_id,
-# MAGIC   d.name AS related_digimon_name,
-# MAGIC   d.image_url AS related_digimon_image_url,
-# MAGIC   fe.condition
-# MAGIC FROM silver.fact_evolution fe
-# MAGIC JOIN silver.dim_digimon d ON d.digimon_id = fe.from_digimon_id;
+# MAGIC   b.digimon_id,
+# MAGIC   b.direction,
+# MAGIC   b.related_digimon_id,
+# MAGIC   b.related_digimon_name,
+# MAGIC   b.related_digimon_image_url,
+# MAGIC   b.condition,
+# MAGIC   coalesce(rl.levels, array()) AS related_digimon_levels
+# MAGIC FROM base b
+# MAGIC LEFT JOIN related_levels rl ON rl.digimon_id = b.related_digimon_id;
 
 # COMMAND ----------
 

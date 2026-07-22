@@ -110,39 +110,82 @@ def _evolution_card_html(name: str, image_url: str | None, color: str, size: int
 
 _ARROW_HTML = '<div style="font-size:26px;color:#898781;align-self:center;padding:0 2px;">&rarr;</div>'
 
+# Mesmo ranking de estágio usado em databricks/notebooks/02_gold_aggregate.py
+# (LEVEL_RANK) — duplicado de propósito: são dois serviços/deploys separados
+# (Databricks vs. Streamlit Cloud), não vale a pena um pacote compartilhado
+# só por isto. Armor/Hybrid ficam no mesmo rank do estágio "irmão" (formas
+# alternativas), o que os coloca em colunas adjacentes na árvore.
+_STAGE_RANK = {
+    "Baby I": 1, "Baby II": 2, "Child": 3,
+    "Adult": 4, "Armor": 4,
+    "Perfect": 5, "Ultimate": 6, "Hybrid": 6,
+    "Unknown": 0,
+}
+_UNKNOWN_STAGE_RANK = 99  # estágio que a DAPI não classificou — vai pro fim, não quebra a coluna
+
+
+def _stage_of(levels: list[str]) -> str:
+    known = [lv for lv in levels if lv in _STAGE_RANK]
+    if known:
+        return min(known, key=lambda lv: _STAGE_RANK[lv])
+    return levels[0] if levels else "?"
+
+
+def _stage_label_html(stage: str) -> str:
+    safe = html.escape(stage)
+    return (
+        '<div style="font-size:11px;color:#898781;text-transform:uppercase;'
+        f'letter-spacing:0.04em;margin-bottom:8px;text-align:center;">{safe}</div>'
+    )
+
+
+def _stage_column_html(stage: str, entries: list[dict], current: tuple[str, str | None] | None) -> str:
+    cards = []
+    if current is not None:
+        name, image_url = current
+        cards.append(_evolution_card_html(name, image_url, _COLOR_CURRENT, _CURRENT_CARD_SIZE, highlight=True))
+    for e in entries:
+        color = _COLOR_PRIOR if e["direction"] == "prior" else _COLOR_NEXT
+        cards.append(
+            _evolution_card_html(e["related_digimon_name"], e.get("related_digimon_image_url"), color, _CARD_SIZE, highlight=False)
+        )
+    cards_html = f'<div style="display:flex;flex-direction:column;align-items:center;gap:14px;">{"".join(cards)}</div>'
+    return f'<div style="display:flex;flex-direction:column;align-items:center;">{_stage_label_html(stage)}{cards_html}</div>'
+
 
 def build_evolution_tree_html(
-    digimon_name: str, digimon_image_url: str | None, evolutions: list[dict]
-) -> tuple[str, int, int]:
-    """Monta a árvore prior -> atual -> next como cards de imagem em HTML/CSS
-    (não dá pra usar st.graphviz_chart com fotos — Graphviz só embute imagens
-    de arquivo local, não URL remota). Retorna quantos nós de cada lado
-    ficaram de fora do teto, pra avisar o usuário."""
-    prior = [e for e in evolutions if e["direction"] == "prior"]
-    next_ = [e for e in evolutions if e["direction"] == "next"]
-    prior_shown, prior_hidden = prior[:_MAX_TREE_NODES], max(0, len(prior) - _MAX_TREE_NODES)
-    next_shown, next_hidden = next_[:_MAX_TREE_NODES], max(0, len(next_) - _MAX_TREE_NODES)
+    digimon_name: str, digimon_image_url: str | None, digimon_levels: list[str], evolutions: list[dict]
+) -> tuple[str, int]:
+    """Monta a árvore agrupada por estágio (Baby I, Baby II, Child, ...), uma
+    coluna por estágio, em vez de só duas pilhas "antes/depois". Retorna
+    quantos nós ficaram de fora do teto por coluna, somados, pra avisar o
+    usuário."""
+    groups: dict[str, list[dict]] = {}
+    for e in evolutions:
+        stage = _stage_of(e.get("related_digimon_levels") or [])
+        groups.setdefault(stage, []).append(e)
 
-    def _stack(items: list[dict], color: str) -> str:
-        cards = "".join(
-            _evolution_card_html(e["related_digimon_name"], e.get("related_digimon_image_url"), color, _CARD_SIZE, highlight=False)
-            for e in items
-        )
-        return f'<div style="display:flex;flex-direction:column;gap:14px;">{cards}</div>'
+    current_stage = _stage_of(digimon_levels)
+    ordered_stages = sorted(
+        set(groups) | {current_stage},
+        key=lambda s: (_STAGE_RANK.get(s, _UNKNOWN_STAGE_RANK), s),
+    )
 
+    hidden_total = 0
     parts = [
         '<div style="overflow-x:auto;padding:12px 4px;">',
-        '<div style="display:flex;align-items:center;gap:10px;min-width:max-content;">',
+        '<div style="display:flex;align-items:flex-start;gap:8px;min-width:max-content;">',
     ]
-    if prior_shown:
-        parts.append(_stack(prior_shown, _COLOR_PRIOR))
-        parts.append(_ARROW_HTML)
-    parts.append(_evolution_card_html(digimon_name, digimon_image_url, _COLOR_CURRENT, _CURRENT_CARD_SIZE, highlight=True))
-    if next_shown:
-        parts.append(_ARROW_HTML)
-        parts.append(_stack(next_shown, _COLOR_NEXT))
+    for i, stage in enumerate(ordered_stages):
+        entries = groups.get(stage, [])
+        shown, hidden = entries[:_MAX_TREE_NODES], max(0, len(entries) - _MAX_TREE_NODES)
+        hidden_total += hidden
+        current = (digimon_name, digimon_image_url) if stage == current_stage else None
+        parts.append(_stage_column_html(stage, shown, current))
+        if i < len(ordered_stages) - 1:
+            parts.append(_ARROW_HTML)
     parts.append("</div></div>")
-    return "".join(parts), prior_hidden, next_hidden
+    return "".join(parts), hidden_total
 
 
 st.set_page_config(page_title="Digimon Lakehouse", page_icon="🦖", layout="wide")
@@ -187,19 +230,19 @@ with tab_explore:
             if not evolutions:
                 st.caption("Nenhuma digivolução registrada pra este digimon.")
             else:
-                tree_html, prior_hidden, next_hidden = build_evolution_tree_html(
-                    digimon["name"], digimon.get("image_url"), evolutions
+                tree_html, hidden_total = build_evolution_tree_html(
+                    digimon["name"], digimon.get("image_url"), digimon["levels"], evolutions
                 )
                 st.markdown(tree_html, unsafe_allow_html=True)
-                st.caption("🔵 evoluiu de · 🟠 este digimon · 🟢 evolui para")
-                if prior_hidden or next_hidden:
+                st.caption("🔵 evoluiu de · 🟠 este digimon · 🟢 evolui para — colunas por estágio")
+                if hidden_total:
                     st.caption(
-                        f"Mostrando até {_MAX_TREE_NODES} por lado — "
-                        f"{prior_hidden} anteriores e {next_hidden} seguintes ficaram de fora do desenho."
+                        f"Mostrando até {_MAX_TREE_NODES} por estágio — {hidden_total} digivolução(ões) "
+                        "ficaram de fora do desenho."
                     )
                 # Nota: não dá pra usar outro st.expander aqui — Streamlit não
                 # permite expander dentro de expander (StreamlitAPIException).
-                if prior_hidden or next_hidden:
+                if hidden_total:
                     st.markdown("**Lista completa (texto)**")
                     next_evos = [e["related_digimon_name"] for e in evolutions if e["direction"] == "next"]
                     prior_evos = [e["related_digimon_name"] for e in evolutions if e["direction"] == "prior"]

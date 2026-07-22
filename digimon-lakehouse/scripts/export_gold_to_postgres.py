@@ -75,18 +75,22 @@ TABLES: list[tuple[str, str]] = [
         related_digimon_id BIGINT NOT NULL,
         related_digimon_name TEXT NOT NULL,
         related_digimon_image_url TEXT,
-        condition TEXT
+        condition TEXT,
+        related_digimon_levels TEXT[]
         """,
     ),
 ]
 
-# Colunas ARRAY por tabela. O databricks-sql-connector devolve ARRAY<...>
-# como STRING no formato JSON (ex.: '["Adult"]'), não como lista Python — sem
-# converter antes do COPY, o Postgres rejeita ("[" não é a sintaxe de array
-# dele, que usa "{...}"). Ver `_coerce_row`.
+# Colunas ARRAY por tabela. O databricks-sql-connector NÃO devolve ARRAY<...>
+# de um jeito único: às vezes vem STRING em formato JSON (ex.: '["Adult"]'),
+# às vezes vem `numpy.ndarray` direto (visto em `digimon_evolutions` mas não
+# nas outras tabelas — mesmo conector, formato de resultado divergente entre
+# queries). Sem converter antes do COPY, o Postgres rejeita os dois formatos
+# (nenhum é a sintaxe de array dele, que usa "{...}"). Ver `_coerce_row`.
 ARRAY_COLUMNS: dict[str, set[str]] = {
     "digimon_summary": {"levels", "types", "attributes", "fields"},
     "longest_evolution_chains": {"digimon_id_path"},
+    "digimon_evolutions": {"related_digimon_levels"},
 }
 
 
@@ -95,8 +99,13 @@ def _coerce_row(row: tuple, columns: list[str], array_columns: set[str]) -> tupl
         return row
     coerced = list(row)
     for i, col in enumerate(columns):
-        if col in array_columns and isinstance(coerced[i], str):
-            coerced[i] = json.loads(coerced[i])
+        if col not in array_columns:
+            continue
+        value = coerced[i]
+        if isinstance(value, str):
+            coerced[i] = json.loads(value)
+        elif hasattr(value, "tolist"):
+            coerced[i] = value.tolist()
     return tuple(coerced)
 
 

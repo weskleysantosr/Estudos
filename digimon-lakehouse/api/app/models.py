@@ -39,3 +39,4 @@ class DigimonEvolution(BaseModel):
     related_digimon_name: str
     related_digimon_image_url: str | None
     condition: str | None
+    related_digimon_levels: list[str]
