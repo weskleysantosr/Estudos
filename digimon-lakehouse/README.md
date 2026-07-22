@@ -6,6 +6,8 @@ Assim como um Digimon evolui de Baby pra Mega, os dados deste projeto evoluem de
 
 **TL;DR do que existe aqui:** um script Python busca todos os Digimons numa API pública → o Databricks organiza isso em três camadas (Bronze/Silver/Gold) → um Postgres gratuito serve como "cache rápido" → uma API FastAPI que você mesmo escreveu expõe os dados → um site em Streamlit consome essa API → o GitHub Actions orquestra tudo automaticamente, todo dia, de graça.
 
+> 🎓 Já rodou tudo e quer **praticar** — criar tabela na mão, mudar estrutura, ver o que mais o Databricks oferece? Isso foi pro [GUIA_DATABRICKS.md](GUIA_DATABRICKS.md), com exercícios testados de verdade neste projeto.
+
 ---
 
 ## 📖 Sumário
