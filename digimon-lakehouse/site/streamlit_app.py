@@ -94,17 +94,18 @@ def _evolution_card_html(name: str, image_url: str | None, color: str, size: int
         img = '<span style="font-size:28px;">🦖</span>'
     border = "3px solid rgba(255,255,255,0.85)" if highlight else "1px solid rgba(0,0,0,0.15)"
     weight = 700 if highlight else 400
-    return f"""
-    <div style="display:flex;flex-direction:column;align-items:center;width:{size + 20}px;">
-      <div style="width:{size}px;height:{size}px;border-radius:16px;background:{color};
-                  border:{border};box-shadow:0 1px 4px rgba(0,0,0,0.25);
-                  display:flex;align-items:center;justify-content:center;overflow:hidden;">
-        {img}
-      </div>
-      <div style="margin-top:6px;font-size:12px;line-height:1.2;text-align:center;
-                  font-weight:{weight};word-break:break-word;">{safe_name}</div>
-    </div>
-    """
+    # Tudo numa linha só, sem quebra: HTML injetado via st.markdown com uma
+    # linha em branco no meio vira bloco indentado (CommonMark trata como
+    # código literal, não HTML) — foi o bug do "apareceu o código html".
+    return (
+        f'<div style="display:flex;flex-direction:column;align-items:center;width:{size + 20}px;">'
+        f'<div style="width:{size}px;height:{size}px;border-radius:16px;background:{color};'
+        f'border:{border};box-shadow:0 1px 4px rgba(0,0,0,0.25);'
+        f'display:flex;align-items:center;justify-content:center;overflow:hidden;">{img}</div>'
+        f'<div style="margin-top:6px;font-size:12px;line-height:1.2;text-align:center;'
+        f'font-weight:{weight};word-break:break-word;">{safe_name}</div>'
+        f"</div>"
+    )
 
 
 _ARROW_HTML = '<div style="font-size:26px;color:#898781;align-self:center;padding:0 2px;">&rarr;</div>'
