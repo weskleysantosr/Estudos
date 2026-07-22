@@ -131,3 +131,15 @@ with tab_evolutions:
     chains = load_longest_chains(limit=10)
     for chain in chains:
         st.write(f"**{chain['root_digimon_name']} → {chain['leaf_digimon_name']}** ({chain['depth']} estágios)")
+
+st.divider()
+st.caption(
+    "🇧🇷 DAPI é uma API gratuita de Digimon que usa dados de fontes oficiais e "
+    "feitas por fãs (principalmente Wikimon.net). A DAPI não é afiliada nem "
+    "reivindica propriedade sobre o material produzido pela Bandai. Digimon e "
+    "outras mídias relacionadas à franquia são marcas registradas da Bandai.\n\n"
+    "🇺🇸 DAPI is a free Digimon API, it uses data from official and fan based "
+    "sources (mainly Wikimon.net). DAPI is not affiliated with nor claims "
+    "ownership to material produced by Bandai. Digimon and other media "
+    "relating to the franchise are registered trademarks of Bandai."
+)
