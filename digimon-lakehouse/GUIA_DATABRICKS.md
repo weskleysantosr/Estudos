@@ -1,13 +1,14 @@
 # 🎓 Guia Prático de Databricks — mexendo de verdade no projeto
 
-Este é o "parte 2": enquanto o [README.md](README.md) explica **o que** o projeto
-é e **como** rodar do zero, este guia é sobre **colocar a mão na massa** —
-alterar estrutura, criar tabela do zero, entender o que o Databricks oferece
-além do que a gente já usou. Cada exercício foi testado de verdade neste
-workspace antes de entrar aqui (nada de "deveria funcionar").
+Este é a "parte 3": o [README.md](README.md) explica **o que** o projeto é,
+o [SETUP.md](SETUP.md) explica **como** rodar do zero, e este guia é sobre
+**colocar a mão na massa** — alterar estrutura, criar tabela do zero,
+entender o que o Databricks oferece além do que a gente já usou. Cada
+exercício foi testado de verdade neste workspace antes de entrar aqui (nada
+de "deveria funcionar").
 
-Pré-requisito: ter completado o Passo 1-3 do README (CLI autenticada, bundle
-deployado, pelo menos um run do job feito).
+Pré-requisito: ter completado o Passo 1-3 do [SETUP.md](SETUP.md) (CLI
+autenticada, bundle deployado, pelo menos um run do job feito).
 
 ---
 
@@ -218,5 +219,5 @@ ter limites em algumas:
 ---
 
 *Achou algum exercício que não bateu com o seu workspace? Anota o erro real
-(igual a seção "Perrengues reais" do [README.md](README.md)) — faz parte do
+(igual a seção "Perrengues reais" do [SETUP.md](SETUP.md#perrengues-reais-erros-que-já-apanhamos-por-você)) — faz parte do
 aprendizado descobrir onde a documentação e a realidade divergem.*
