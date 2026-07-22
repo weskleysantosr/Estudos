@@ -1,3 +1,2 @@
 streamlit==1.40.1
 requests==2.32.3
-graphviz==0.20.3

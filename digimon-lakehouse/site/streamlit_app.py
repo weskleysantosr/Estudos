@@ -14,6 +14,7 @@ ar por instabilidade do tier gratuito não pode virar uma tela em branco.
 
 from __future__ import annotations
 
+import html
 import os
 
 import requests
@@ -78,45 +79,69 @@ def load_evolutions(digimon_id: int) -> list[dict]:
 _COLOR_PRIOR = "#2a78d6"  # azul — evoluiu de
 _COLOR_CURRENT = "#eb6834"  # laranja — o digimon aberto
 _COLOR_NEXT = "#1baf7a"  # verde-água — evolui para
-_MAX_TREE_NODES = 12  # grafo de um digimon com 80+ evoluções vira ilegível sem teto
+_CARD_SIZE = 84  # px — lado do card de prior/next
+_CURRENT_CARD_SIZE = 112  # px — o digimon aberto fica em destaque
+# Cards com imagem ocupam bem mais espaço vertical que os nós de texto do
+# Graphviz antigo, então o teto aqui é menor pra não virar uma coluna gigante.
+_MAX_TREE_NODES = 8
 
 
-def _dot_escape(text: str) -> str:
-    return text.replace("\\", "\\\\").replace('"', '\\"')
+def _evolution_card_html(name: str, image_url: str | None, color: str, size: int, *, highlight: bool) -> str:
+    safe_name = html.escape(name)
+    if image_url:
+        img = f'<img src="{html.escape(image_url)}" style="max-width:100%;max-height:100%;object-fit:contain;">'
+    else:
+        img = '<span style="font-size:28px;">🦖</span>'
+    border = "3px solid rgba(255,255,255,0.85)" if highlight else "1px solid rgba(0,0,0,0.15)"
+    weight = 700 if highlight else 400
+    return f"""
+    <div style="display:flex;flex-direction:column;align-items:center;width:{size + 20}px;">
+      <div style="width:{size}px;height:{size}px;border-radius:16px;background:{color};
+                  border:{border};box-shadow:0 1px 4px rgba(0,0,0,0.25);
+                  display:flex;align-items:center;justify-content:center;overflow:hidden;">
+        {img}
+      </div>
+      <div style="margin-top:6px;font-size:12px;line-height:1.2;text-align:center;
+                  font-weight:{weight};word-break:break-word;">{safe_name}</div>
+    </div>
+    """
 
 
-def build_evolution_tree_dot(digimon_name: str, evolutions: list[dict]) -> tuple[str, int, int]:
-    """Monta o grafo (DOT) prior -> atual -> next. Retorna também quantos nós
-    de cada lado ficaram de fora do teto, pra avisar o usuário."""
+_ARROW_HTML = '<div style="font-size:26px;color:#898781;align-self:center;padding:0 2px;">&rarr;</div>'
+
+
+def build_evolution_tree_html(
+    digimon_name: str, digimon_image_url: str | None, evolutions: list[dict]
+) -> tuple[str, int, int]:
+    """Monta a árvore prior -> atual -> next como cards de imagem em HTML/CSS
+    (não dá pra usar st.graphviz_chart com fotos — Graphviz só embute imagens
+    de arquivo local, não URL remota). Retorna quantos nós de cada lado
+    ficaram de fora do teto, pra avisar o usuário."""
     prior = [e for e in evolutions if e["direction"] == "prior"]
     next_ = [e for e in evolutions if e["direction"] == "next"]
     prior_shown, prior_hidden = prior[:_MAX_TREE_NODES], max(0, len(prior) - _MAX_TREE_NODES)
     next_shown, next_hidden = next_[:_MAX_TREE_NODES], max(0, len(next_) - _MAX_TREE_NODES)
 
-    lines = [
-        "digraph {",
-        "rankdir=LR;",
-        'bgcolor="transparent";',
-        'node [shape=box, style="filled,rounded", fontname="sans-serif", fontcolor="white", color="none"];',
-        'edge [color="#89887f"];',
-        f'current [label="{_dot_escape(digimon_name)}", fillcolor="{_COLOR_CURRENT}", penwidth=2];',
+    def _stack(items: list[dict], color: str) -> str:
+        cards = "".join(
+            _evolution_card_html(e["related_digimon_name"], e.get("related_digimon_image_url"), color, _CARD_SIZE, highlight=False)
+            for e in items
+        )
+        return f'<div style="display:flex;flex-direction:column;gap:14px;">{cards}</div>'
+
+    parts = [
+        '<div style="overflow-x:auto;padding:12px 4px;">',
+        '<div style="display:flex;align-items:center;gap:10px;min-width:max-content;">',
     ]
-    for i, e in enumerate(prior_shown):
-        node = f"prior_{i}"
-        lines.append(f'{node} [label="{_dot_escape(e["related_digimon_name"])}", fillcolor="{_COLOR_PRIOR}"];')
-        lines.append(f"{node} -> current;")
-    if prior_hidden:
-        lines.append(f'prior_more [label="+{prior_hidden} outras", shape=plaintext, fontcolor="#898781"];')
-        lines.append("prior_more -> current [style=dashed, arrowhead=none];")
-    for i, e in enumerate(next_shown):
-        node = f"next_{i}"
-        lines.append(f'{node} [label="{_dot_escape(e["related_digimon_name"])}", fillcolor="{_COLOR_NEXT}"];')
-        lines.append(f"current -> {node};")
-    if next_hidden:
-        lines.append(f'next_more [label="+{next_hidden} outras", shape=plaintext, fontcolor="#898781"];')
-        lines.append("current -> next_more [style=dashed, arrowhead=none];")
-    lines.append("}")
-    return "\n".join(lines), prior_hidden, next_hidden
+    if prior_shown:
+        parts.append(_stack(prior_shown, _COLOR_PRIOR))
+        parts.append(_ARROW_HTML)
+    parts.append(_evolution_card_html(digimon_name, digimon_image_url, _COLOR_CURRENT, _CURRENT_CARD_SIZE, highlight=True))
+    if next_shown:
+        parts.append(_ARROW_HTML)
+        parts.append(_stack(next_shown, _COLOR_NEXT))
+    parts.append("</div></div>")
+    return "".join(parts), prior_hidden, next_hidden
 
 
 st.set_page_config(page_title="Digimon Lakehouse", page_icon="🦖", layout="wide")
@@ -161,8 +186,10 @@ with tab_explore:
             if not evolutions:
                 st.caption("Nenhuma digivolução registrada pra este digimon.")
             else:
-                dot, prior_hidden, next_hidden = build_evolution_tree_dot(digimon["name"], evolutions)
-                st.graphviz_chart(dot, use_container_width=True)
+                tree_html, prior_hidden, next_hidden = build_evolution_tree_html(
+                    digimon["name"], digimon.get("image_url"), evolutions
+                )
+                st.markdown(tree_html, unsafe_allow_html=True)
                 st.caption("🔵 evoluiu de · 🟠 este digimon · 🟢 evolui para")
                 if prior_hidden or next_hidden:
                     st.caption(
